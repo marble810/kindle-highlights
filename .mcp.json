@@ -1,0 +1,13 @@
+{
+  "kindle-highlights": {
+    "command": "node",
+    "args": [
+      "/Users/liangkeren/Coding/MCPs/kindle-highlights/dist/index.js",
+      "--region",
+      "co.jp"
+    ],
+    "env": {
+      "LOG_LEVEL": "info"
+    }
+  }
+}
