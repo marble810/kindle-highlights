@@ -31,6 +31,9 @@ logs/
 *.swo
 *~
 
+# MCP client configuration (user-specific)
+.mcp.json
+
 # OS
 .DS_Store
 Thumbs.db
