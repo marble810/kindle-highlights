@@ -11,13 +11,11 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "login": "node dist/index.js --login",
-    "login:jp": "node dist/index.js --login --region co.jp",
-    "login:uk": "node dist/index.js --login --region co.uk",
     "start": "node dist/index.js",
-    "start:jp": "node dist/index.js --region co.jp",
-    "start:uk": "node dist/index.js --region co.uk",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
     "test": "vitest",
-    "test:unit": "vitest run tests/unit"
+    "test:unit": "vitest run tests/unit",
+    "test:region": "node tests/test-region-config.mjs"
   },
   "keywords": [
     "mcp",
@@ -39,7 +37,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "@types/node": "^20.10.0",
+    "@types/node": "^20.19.33",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"

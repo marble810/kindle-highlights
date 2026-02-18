@@ -19,14 +19,18 @@ import type {
   HighlightColor,
   ScrapingResult,
   AmazonRegion,
+  SessionRefreshResult,
+  LoginToolResult,
 } from './types.js';
 import {
   AuthError,
   ScrapingError,
+  getAmazonBaseUrl,
+  getNotebookUrl,
 } from './types.js';
 
 // Default Amazon region
-const DEFAULT_REGION: AmazonRegion = 'com'; // US
+const DEFAULT_REGION: AmazonRegion = 'co.jp'; // Japan
 
 // Default configuration
 const DEFAULT_CONFIG: BrowserConfig = {
@@ -48,7 +52,7 @@ type Selectors = {
 
 // Selectors for Kindle Notebook page
 const SELECTORS: Selectors = {
-  bookTitle: 'h2.kp-notebook-searchable',
+  bookTitle: 'h3.kp-notebook-metadata',
   bookAuthor: 'p.kp-notebook-searchable',
   highlightContainer: '.a-spacing-base',
   highlightText: '#highlight',
@@ -202,8 +206,9 @@ export class KindleScraper {
 
   /**
    * Extract book data from current page
+   * @param authorOverride - Optional author name from sidebar data (more reliable than DOM)
    */
-  async extractBookData(): Promise<ScrapingResult<KindleBookData>> {
+  async extractBookData(authorOverride?: string): Promise<ScrapingResult<KindleBookData>> {
     if (!this.page) {
       return { success: false, error: 'Page not initialized' };
     }
@@ -215,7 +220,12 @@ export class KindleScraper {
 
       // Extract book metadata
       const title = await this.safeGetText(SELECTORS.bookTitle);
-      const author = await this.safeGetText(SELECTORS.bookAuthor);
+      // If authorOverride is provided, use it; otherwise extract from DOM and clean up prefix
+      let author = authorOverride;
+      if (!author) {
+        const rawAuthor = await this.safeGetText(SELECTORS.bookAuthor);
+        author = rawAuthor.replace(/^(创建者|著者)[:：]\s*/, '').trim();
+      }
 
       if (!title) {
         // Enhanced error info - diagnose page structure
@@ -349,7 +359,8 @@ export class KindleScraper {
           // Parse text like "Book TitleCreator: Author"
           const parts = text.split(/创建者|著者/);
           const title = parts[0]?.trim() || '';
-          const author = parts[1]?.trim() || '';
+          // Remove leading colon and spaces from author
+          const author = parts[1]?.replace(/^[:：]\s*/, '').trim() || '';
           return {
             asin: item.id,
             title,
@@ -383,11 +394,46 @@ export class KindleScraper {
         return false;
       }
 
+      // Get initial highlight count for comparison
+      const initialCount = await this.page.evaluate(() => {
+        const items = document.querySelectorAll('#kp-notebook-annotations .a-spacing-base');
+        return items.length;
+      });
+      console.log(`[Scraper] Initial highlight count: ${initialCount}`);
+
       console.log(`[Scraper] Clicking on book ${asin}...`);
+
+      // Wait for the AJAX request that loads the book's annotations
+      const requestPromise = this.page.waitForResponse(
+        (response) => response.url().includes('notebook') && response.url().includes(`asin=${asin}`),
+        { timeout: 15000 }
+      );
+
       await element.click();
 
-      // Wait for content to update
-      await this.page.waitForTimeout(5000);
+      // Wait for the AJAX request to complete
+      await requestPromise.catch(() => {
+        console.log(`[Scraper] AJAX request timeout, continuing...`);
+      });
+
+      // Wait for content to render
+      await this.page.waitForTimeout(3000);
+
+      // Verify content has changed
+      const newCount = await this.page.evaluate(() => {
+        const items = document.querySelectorAll('#kp-notebook-annotations .a-spacing-base');
+        return items.length;
+      });
+      console.log(`[Scraper] New highlight count: ${newCount}`);
+
+      // Get the current book title for verification
+      const title = await this.page.evaluate(() => {
+        // Try to find the title in the sidebar (the selected book should be visually distinguished)
+        const selectedBook = document.querySelector('.kp-notebook-library-each-book.kp-notebook-selected') ||
+                            document.querySelector('#kp-notebook-library .a-text-bold');
+        return selectedBook?.textContent?.split(/创建者|著者/)[0]?.trim() || 'Unknown';
+      });
+      console.log(`[Scraper] Selected book title: ${title}`);
 
       console.log(`[Scraper] Successfully selected book ${asin}`);
       return true;
@@ -481,11 +527,100 @@ export async function validateSession(
 }
 
 /**
+ * Attempt to refresh Amazon session in headless mode
+ * Strategy:
+ * 1. Visit Notebook directly, check if session is still valid
+ * 2. If invalid, visit Amazon homepage first, then visit Notebook
+ */
+export async function refreshSessionHeadless(
+  region: AmazonRegion = DEFAULT_REGION
+): Promise<SessionRefreshResult> {
+  console.error(`[Refresh] Attempting to refresh session for region: ${region}...`);
+
+  const browserManager = new BrowserManager({
+    headless: true,  // Run in background
+  }, region);
+
+  try {
+    await browserManager.launch();
+    const page = await browserManager.newPage();
+    const notebookUrl = getNotebookUrl(region);
+
+    // Attempt 1: Visit Notebook directly
+    await page.goto(notebookUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000,
+    });
+
+    let currentUrl = page.url();
+
+    // If not redirected to login page, session is still valid
+    if (!currentUrl.includes('/signin') && !currentUrl.includes('/ap/signin')) {
+      await browserManager.close();
+      console.error('[Refresh] Session still valid (cookie refresh)');
+      return {
+        success: true,
+        method: 'cookie_refresh',
+        message: 'Session is still valid',
+      };
+    }
+
+    // Attempt 2: Visit homepage first, then visit Notebook
+    console.error('[Refresh] Session expired, trying homepage visit...');
+    const homeUrl = getAmazonBaseUrl(region);
+    await page.goto(homeUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000,
+    });
+
+    // Wait for any auto-refresh to complete
+    await page.waitForTimeout(2000);
+
+    // Visit Notebook again
+    await page.goto(notebookUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15000,
+    });
+
+    currentUrl = page.url();
+
+    if (!currentUrl.includes('/signin') && !currentUrl.includes('/ap/signin')) {
+      await browserManager.close();
+      console.error('[Refresh] Session refreshed via homepage visit');
+      return {
+        success: true,
+        method: 'homepage_visit',
+        message: 'Session refreshed successfully',
+      };
+    }
+
+    // Both methods failed
+    await browserManager.close();
+    console.error('[Refresh] Both refresh attempts failed');
+    return {
+      success: false,
+      method: 'failed',
+      message: 'Session refresh failed, manual login required',
+    };
+
+  } catch (error) {
+    await browserManager.close();
+    console.error('[Refresh] Error during refresh:', error);
+    return {
+      success: false,
+      method: 'failed',
+      message: `Refresh error: ${error}`,
+    };
+  }
+}
+
+/**
  * Get list of all books from Kindle Notebook
  * Returns array of book info without fetching highlights
  */
 export async function getBookList(
-  region: AmazonRegion = DEFAULT_REGION
+  region: AmazonRegion = DEFAULT_REGION,
+  autoRefresh: boolean = true  // New parameter
 ): Promise<ScrapingResult<{ asin: string; title: string; author: string }[]>> {
   const browserManager = new BrowserManager({}, region);
 
@@ -504,6 +639,22 @@ export async function getBookList(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // New: Auto-refresh logic
+    if (error instanceof AuthError && autoRefresh) {
+      console.error('[Auth] Session expired, attempting auto-refresh...');
+      const refreshResult = await refreshSessionHeadless(region);
+
+      if (refreshResult.success) {
+        console.error('[Auth] Auto-refresh successful, retrying...');
+        // Close current browserManager, retry operation
+        await browserManager.close();
+
+        // Recursive call, but disable autoRefresh to prevent infinite loop
+        return getBookList(region, false);
+      }
+      // Auto-refresh failed, continue returning error
+    }
 
     if (error instanceof AuthError) {
       return {
@@ -526,7 +677,8 @@ export async function getBookList(
  */
 export async function fetchBookHighlights(
   asin: string,
-  region: AmazonRegion = DEFAULT_REGION
+  region: AmazonRegion = DEFAULT_REGION,
+  autoRefresh: boolean = true  // New parameter
 ): Promise<ScrapingResult<KindleBookData>> {
   const browserManager = new BrowserManager({}, region);
 
@@ -534,6 +686,11 @@ export async function fetchBookHighlights(
     await browserManager.launch();
     const scraper = new KindleScraper(browserManager, region);
     await scraper.navigateToNotebook();
+
+    // Get book list first to find the correct author from sidebar data
+    const books = await scraper.getBookList();
+    const targetBook = books.find(b => b.asin === asin);
+    const correctAuthor = targetBook?.author;
 
     // Select the book by clicking on it
     const selected = await scraper.selectBook(asin);
@@ -545,14 +702,26 @@ export async function fetchBookHighlights(
       };
     }
 
-    // Extract data
-    const result = await scraper.extractBookData();
+    // Extract data with the correct author from sidebar
+    const result = await scraper.extractBookData(correctAuthor);
 
     await scraper.close();
 
     return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // New: Auto-refresh logic
+    if (error instanceof AuthError && autoRefresh) {
+      console.error('[Auth] Session expired, attempting auto-refresh...');
+      const refreshResult = await refreshSessionHeadless(region);
+
+      if (refreshResult.success) {
+        console.error('[Auth] Auto-refresh successful, retrying...');
+        await browserManager.close();
+        return fetchBookHighlights(asin, region, false);
+      }
+    }
 
     if (error instanceof AuthError) {
       return {
@@ -750,5 +919,86 @@ export async function launchLoginSession(
     console.error('[Login] Error:', error);
   } finally {
     await browserManager.close();
+  }
+}
+
+/**
+ * Launch login for MCP tool
+ * Returns status without blocking for user to complete login
+ */
+export async function launchLoginForMCP(
+  region: AmazonRegion = DEFAULT_REGION
+): Promise<LoginToolResult> {
+  const browserManager = new BrowserManager({
+    headless: false,  // Open headed browser
+  }, region);
+
+  try {
+    console.error(`[MCP Login] Launching browser for Amazon ${region}...`);
+    await browserManager.launch();
+
+    const page = await browserManager.newPage();
+
+    // Open Amazon homepage
+    const homeUrl = getAmazonBaseUrl(region);
+    console.error(`[MCP Login] Opening Amazon homepage: ${homeUrl}`);
+    await page.goto(homeUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+
+    // Start background polling to detect login status
+    const context = browserManager.getContext();
+    let loginDetected = false;
+
+    const checkLoginStatus = async () => {
+      if (loginDetected) return;
+
+      try {
+        const notebookUrl = getNotebookUrl(region);
+        const testPage = await context?.newPage();
+        if (!testPage) return;
+
+        await testPage.goto(notebookUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 10000,
+        }).catch(() => null);
+
+        const testUrl = testPage.url();
+        await testPage.close();
+
+        if (!testUrl.includes('/signin') && !testUrl.includes('/ap/signin')) {
+          loginDetected = true;
+          console.error('[MCP Login] ✅ Login detected! Session saved.');
+        }
+      } catch (error) {
+        // Ignore errors, continue polling
+      }
+    };
+
+    // Check every 3 seconds
+    const loginCheckInterval = setInterval(checkLoginStatus, 3000);
+
+    // Listen for browser close event
+    context?.on('close', () => {
+      clearInterval(loginCheckInterval);
+      console.error('[MCP Login] Browser closed.');
+    });
+
+    return {
+      success: true,
+      status: 'browser_opened',
+      message: `Browser opened for Amazon ${region}. Please complete login in the browser.`,
+      region,
+    };
+
+  } catch (error) {
+    await browserManager.close();
+    return {
+      success: false,
+      status: 'failed',
+      message: `Failed to launch browser: ${error}`,
+      region,
+    };
   }
 }

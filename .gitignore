@@ -16,6 +16,9 @@ dist/
 # Browser profile (contains sensitive cookies/session data)
 kindle-mcp-profile/
 
+# User's local region configuration
+kindle-region.config.json
+
 # Debug output
 debug/
 *.log
@@ -33,5 +36,13 @@ logs/
 Thumbs.db
 
 # Testing
+tests/
 coverage/
 .nyc_output/
+
+# AI agents auxiliary files
+.sisyphus/
+AGENTS.md
+TESTING.md
+restore.md
+docs/

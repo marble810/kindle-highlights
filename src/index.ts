@@ -12,34 +12,23 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { scrapeKindleNotes, launchLoginSession, getBookList, fetchBookHighlights, getLoginInstructions } from './browser.js';
-import type { KindleBookData, ScrapingResult, AmazonRegion } from './types.js';
-
-/**
- * Amazon region configuration
- */
-const REGIONS: Record<string, { name: string; url: string }> = {
-  'com': { name: 'United States', url: 'https://www.amazon.com' },
-  'co.jp': { name: 'Japan', url: 'https://www.amazon.co.jp' },
-  'co.uk': { name: 'United Kingdom', url: 'https://www.amazon.co.uk' },
-  'de': { name: 'Germany', url: 'https://www.amazon.de' },
-  'fr': { name: 'France', url: 'https://www.amazon.fr' },
-  'es': { name: 'Spain', url: 'https://www.amazon.es' },
-  'it': { name: 'Italy', url: 'https://www.amazon.it' },
-  'ca': { name: 'Canada', url: 'https://www.amazon.ca' },
-  'com.au': { name: 'Australia', url: 'https://www.amazon.com.au' },
-  'in': { name: 'India', url: 'https://www.amazon.in' },
-  'com.mx': { name: 'Mexico', url: 'https://www.amazon.com.mx' },
-};
-
-const DEFAULT_REGION: AmazonRegion = 'com';
+import { scrapeKindleNotes, launchLoginSession, getBookList, fetchBookHighlights, getLoginInstructions, launchLoginForMCP } from './browser.js';
+import type { KindleBookData, ScrapingResult, AmazonRegion, LoginToolResult } from './types.js';
+import {
+  getRegionConfig,
+  REGIONS,
+  isValidRegion,
+  getValidRegions,
+  formatRegionConfig,
+  type RegionConfig
+} from './config.js';
 
 /**
  * Parse command line arguments
  */
 interface CliArgs {
   login: boolean;
-  region: AmazonRegion | null;
+  region: string | null;
 }
 
 function parseArgs(): CliArgs {
@@ -56,43 +45,28 @@ function parseArgs(): CliArgs {
       result.login = true;
     } else if (arg === '--region') {
       // Get next argument as region value (space-separated format)
-      const regionCode = args[++i] as AmazonRegion;
-      if (regionCode && REGIONS[regionCode]) {
+      const regionCode = args[++i];
+      if (regionCode && isValidRegion(regionCode)) {
         result.region = regionCode;
       } else {
         console.error(`Invalid region: ${regionCode}`);
-        console.error('Valid regions: ' + Object.keys(REGIONS).join(', '));
+        console.error('Valid regions: ' + getValidRegions().join(', '));
         process.exit(1);
       }
     } else if (arg.startsWith('--region=')) {
       // Handle equals format: --region=co.jp
-      const regionCode = arg.split('=')[1] as AmazonRegion;
-      if (REGIONS[regionCode]) {
+      const regionCode = arg.split('=')[1];
+      if (regionCode && isValidRegion(regionCode)) {
         result.region = regionCode;
       } else {
         console.error(`Invalid region: ${regionCode}`);
-        console.error('Valid regions: ' + Object.keys(REGIONS).join(', '));
+        console.error('Valid regions: ' + getValidRegions().join(', '));
         process.exit(1);
       }
     }
   }
 
   return result;
-}
-
-/**
- * Get region code with fallback
- */
-function getRegion(argRegion: AmazonRegion | null): AmazonRegion {
-  return argRegion || DEFAULT_REGION;
-}
-
-/**
- * Validate Amazon region
- */
-function isValidRegion(region: string): region is AmazonRegion {
-  const validRegions: AmazonRegion[] = ['com', 'co.jp', 'co.uk', 'de', 'fr', 'es', 'it', 'ca', 'com.au', 'in', 'com.mx'];
-  return validRegions.includes(region as AmazonRegion);
 }
 
 /**
@@ -115,6 +89,20 @@ function createServer(region: AmazonRegion): Server {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
+        {
+          name: 'login',
+          description: 'Launch an interactive browser session for Amazon authentication. Use this when your session expires or when you need to log in for the first time. The browser will open and wait for you to complete the login process manually.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              region: {
+                type: 'string',
+                description: 'Amazon region code (e.g., "com" for US, "co.jp" for Japan). Defaults to the server configured region.',
+                enum: getValidRegions(),
+              },
+            },
+          },
+        },
         {
           name: 'get_book_list',
           description: 'Get list of all books with highlights from Kindle Notebook. Returns book titles and authors for user to select.',
@@ -146,6 +134,25 @@ function createServer(region: AmazonRegion): Server {
 
     try {
       switch (name) {
+        case 'login': {
+          const loginRegion = typeof args?.region === 'string' && isValidRegion(args.region)
+            ? args.region as AmazonRegion
+            : region;
+
+          console.error(`[MCP] Login requested for region: ${loginRegion}`);
+
+          const result = await launchLoginForMCP(loginRegion);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
         case 'get_book_list': {
           console.error(`[MCP] Getting book list from region: ${region}...`);
 
@@ -153,14 +160,20 @@ function createServer(region: AmazonRegion): Server {
           const result = await getBookList(region);
 
           if (!result.success) {
-            // 提供友好的错误提示
             const errorMessage = result.error || 'Unknown error';
+
             if (errorMessage.includes('Session expired') || errorMessage.includes('not logged in')) {
+              // Return structured error, prompt user to use login tool
               return {
                 content: [
                   {
                     type: 'text',
-                    text: getLoginInstructions(region),
+                    text: JSON.stringify({
+                      error: 'SESSION_EXPIRED',
+                      message: 'Your Amazon session has expired.',
+                      region: region,
+                      actionRequired: 'Please use the "login" MCP tool to re-authenticate.',
+                    }, null, 2),
                   },
                 ],
                 isError: true,
@@ -213,14 +226,20 @@ function createServer(region: AmazonRegion): Server {
           const result = await fetchBookHighlights(asin, region);
 
           if (!result.success) {
-            // 提供友好的错误提示
             const errorMessage = result.error || 'Unknown error';
+
             if (errorMessage.includes('Session expired') || errorMessage.includes('not logged in')) {
+              // Return structured error, prompt user to use login tool
               return {
                 content: [
                   {
                     type: 'text',
-                    text: getLoginInstructions(region),
+                    text: JSON.stringify({
+                      error: 'SESSION_EXPIRED',
+                      message: 'Your Amazon session has expired.',
+                      region: region,
+                      actionRequired: 'Please use the "login" MCP tool to re-authenticate.',
+                    }, null, 2),
                   },
                 ],
                 isError: true,
@@ -297,21 +316,23 @@ function createServer(region: AmazonRegion): Server {
 async function main(): Promise<void> {
   // Parse command line arguments
   const cliArgs = parseArgs();
-  const region = getRegion(cliArgs.region);
+
+  // Get region configuration with three-tier priority
+  const regionConfig = getRegionConfig(cliArgs.region);
+  const region = regionConfig.region;
+  const regionInfo = REGIONS[region];
+
+  // Show region configuration source
+  console.error(`[MCP] Region configuration: ${formatRegionConfig(regionConfig)}`);
+  console.error(`[MCP] Sign-in URL: ${regionInfo.url}/login`);
+  console.error(`[MCP] Notebook URL: ${regionInfo.url.replace('www.amazon', 'read.amazon')}/notebook`);
 
   // Handle --login flag
   if (cliArgs.login) {
-    const regionInfo = REGIONS[region];
     console.error(`[MCP] Login mode for Amazon ${region} (${regionInfo.name})`);
     await launchLoginSession(region);
     process.exit(0);
   }
-
-  // Show region info
-  const regionInfo = REGIONS[region];
-  console.error(`[MCP] Using Amazon region: ${region} (${regionInfo.name})`);
-  console.error(`[MCP] Sign-in URL: ${regionInfo.url}/login`);
-  console.error(`[MCP] Notebook URL: ${regionInfo.url.replace('www.amazon', 'read.amazon')}/notebook`);
 
   // Create and start MCP server
   const server = createServer(region);
@@ -323,7 +344,6 @@ async function main(): Promise<void> {
 
   console.error('[MCP] Server started and ready to accept connections');
   console.error(`[MCP] Region: ${region} (${regionInfo.name})`);
-  console.error('[MCP] To change region: npm run start:<region> (e.g., start:jp)');
 }
 
 // Run main function

@@ -14,6 +14,7 @@ This is a **Kindle Web Reader MCP Server** - a Node.js-based MCP (Model Context 
 src/
 ├── index.ts      # MCP Server entry point (Stdio Transport)
 ├── browser.ts    # Playwright wrapper (login & scraping logic)
+├── config.ts     # Region configuration management
 └── types.ts      # TypeScript interfaces
 ```
 
@@ -31,6 +32,50 @@ The server uses **Persistent Browser Context** for Amazon authentication:
 4. **Subsequent Runs**: Load saved profile for headless operation
 
 This avoids storing credentials in code and handles Amazon's anti-automation measures.
+
+### Region Configuration Priority
+
+The server supports **three-tier configuration priority** (highest to lowest):
+
+1. **CLI Argument** `--region=<code>` - Temporary override for testing
+2. **Environment Variable** `KINDLE_REGION` - MCP client configuration (e.g., Claude Desktop)
+3. **Config File** `kindle-region.config.json` - Persistent project configuration
+4. **Default** `com` (US) - Fallback when no configuration is provided
+
+**Configuration Methods**:
+
+**Method 1: CLI Argument** (highest priority)
+```bash
+node dist/index.js --region=co.jp
+```
+
+**Method 2: Environment Variable** (for MCP clients)
+```bash
+KINDLE_REGION=co.jp node dist/index.js
+```
+
+**Method 3: Config File** (persistent)
+```bash
+# Create config file
+cp kindle-region.config.json.example kindle-region.config.json
+# Edit kindle-region.config.json:
+# {"region": "co.jp", "name": "Japan"}
+```
+
+**Claude Desktop Configuration** (`~/.config/claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "kindle": {
+      "command": "node",
+      "args": ["/path/to/kindle-mcp-server/dist/index.js"],
+      "env": {
+        "KINDLE_REGION": "co.jp"
+      }
+    }
+  }
+}
+```
 
 ### Amazon Region Selection
 
@@ -52,11 +97,23 @@ The server supports multiple Amazon regions/endpoints. Use `--region=<code>` to 
 
 **Usage Examples**:
 ```bash
-# Login to Japan Amazon
+# Method 1: CLI argument (temporary override)
 npm run login -- --region=co.jp
-
-# Start server for Japan
 node dist/index.js --region=co.jp
+
+# Method 2: Environment variable
+KINDLE_REGION=co.jp npm run login
+KINDLE_REGION=co.jp node dist/index.js
+
+# Method 3: Config file (persistent)
+# Create and edit kindle-region.config.json
+echo '{"region":"co.jp","name":"Japan"}' > kindle-region.config.json
+npm run login
+node dist/index.js
+
+# CLI argument overrides all other methods
+KINDLE_REGION=com.au node dist/index.js --region=co.jp
+# Result: Uses co.jp (CLI has highest priority)
 ```
 
 ### MCP Tool Interface
@@ -125,11 +182,17 @@ npm run login -- --region=co.jp
 
 ### Run the MCP Server
 ```bash
-# Default region (US)
+# Method 1: Using CLI argument
+node dist/index.js --region=co.jp
+
+# Method 2: Using environment variable
+KINDLE_REGION=co.jp node dist/index.js
+
+# Method 3: Using config file (create kindle-region.config.json)
 node dist/index.js
 
-# Specific region
-node dist/index.js --region=co.jp
+# Default (no configuration) - uses US
+node dist/index.js
 ```
 
 ### Run a Single Test (if tests exist)
@@ -150,8 +213,9 @@ The server handles these key error scenarios:
 
 Ensure these are in `.gitignore`:
 ```
-kindle-mcp-profile/     # Browser profile with cookies/session
-dist/                   # Compiled TypeScript
+kindle-mcp-profile/          # Browser profile with cookies/session
+kindle-region.config.json    # User's local region configuration
+dist/                       # Compiled TypeScript
 node_modules/
 .env
 ```

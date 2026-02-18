@@ -122,3 +122,29 @@ export interface ScrapingResult<T> {
   /** Error message if failed */
   error?: string;
 }
+
+/**
+ * Session refresh result
+ */
+export interface SessionRefreshResult {
+  /** Whether refresh was successful */
+  success: boolean;
+  /** Method used for refresh */
+  method: 'cookie_refresh' | 'homepage_visit' | 'failed';
+  /** Result message */
+  message: string;
+}
+
+/**
+ * Login tool return result
+ */
+export interface LoginToolResult {
+  /** Whether browser was successfully opened */
+  success: boolean;
+  /** Login status */
+  status: 'browser_opened' | 'login_detected' | 'failed';
+  /** Status message */
+  message: string;
+  /** Amazon region */
+  region: AmazonRegion;
+}
