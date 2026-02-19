@@ -4,7 +4,7 @@
  * 1. CLI arguments (--region=<code>) - highest priority
  * 2. Environment variables (KINDLE_REGION)
  * 3. Config file (kindle-region.config.json)
- * 4. Default value (com) - fallback
+ * 4. Default value (co.jp) - fallback
  */
 
 import { readFileSync, existsSync } from 'fs';
