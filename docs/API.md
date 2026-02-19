@@ -588,7 +588,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
 const server = new Server(
   {
-    name: 'kindle-mcp-server',
+    name: 'kindle-annotations-mcp',
     version: '1.0.0',
   },
   {

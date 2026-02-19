@@ -1,11 +1,11 @@
 {
-  "name": "kindle-mcp-server",
+  "name": "kindle-annotations-mcp",
   "version": "1.0.0",
-  "description": "MCP Server for scraping Kindle highlights and notes from read.amazon.com",
+  "description": "MCP Server for scraping Kindle annotations (highlights, notes, bookmarks) from read.amazon.com",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "kindle-mcp": "./dist/index.js"
+    "kindle-annotations-mcp": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",

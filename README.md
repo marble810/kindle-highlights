@@ -44,8 +44,8 @@ It handles the authentication and scraping process securely using Playwright, su
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/kindle-mcp-server.git
-   cd kindle-mcp-server
+   git clone https://github.com/yourusername/kindle-annotations-mcp.git
+   cd kindle-annotations-mcp
    ```
 
 2. **Install dependencies**
@@ -92,7 +92,7 @@ Add the server to your MCP client configuration (e.g., Claude Desktop, Cline, et
   "mcpServers": {
     "kindle": {
       "command": "node",
-      "args": ["/absolute/path/to/kindle-mcp-server/dist/index.js"],
+      "args": ["/absolute/path/to/kindle-annotations-mcp/dist/index.js"],
       "env": {
         "KINDLE_REGION": "com"
       }

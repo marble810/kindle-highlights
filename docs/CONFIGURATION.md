@@ -203,8 +203,8 @@ export const DEFAULT_REGION: AmazonRegion = 'co.jp';
 
 1. **为每个区域创建独立的配置文件**
    ```bash
-   kindle-mcp-server-us/   # 使用 'com'
-   kindle-mcp-server-jp/   # 使用 'co.jp'
+   kindle-annotations-mcp-us/   # 使用 'com'
+   kindle-annotations-mcp-jp/   # 使用 'co.jp'
    ```
 
 2. **使用环境变量动态切换**（推荐）
@@ -351,7 +351,7 @@ npm start
   "mcpServers": {
     "kindle": {
       "command": "node",
-      "args": ["/usr/local/kindle-mcp-server/dist/index.js"],
+      "args": ["/usr/local/kindle-annotations-mcp/dist/index.js"],
       "env": {
         "KINDLE_REGION": "com"
       }

@@ -215,7 +215,7 @@ node dist/index.js --region co.jp --login  # 顺序错误（应该 npm run login
      "mcpServers": {
        "kindle": {
          "command": "node",
-         "args": ["/absolute/path/to/kindle-mcp-server/dist/index.js"],
+         "args": ["/absolute/path/to/kindle-annotations-mcp/dist/index.js"],
          "env": {
            "KINDLE_REGION": "com"
          }
@@ -230,7 +230,7 @@ node dist/index.js --region co.jp --login  # 顺序错误（应该 npm run login
    "args": ["./dist/index.js"]
 
    // ✅ 正确：绝对路径
-   "args": ["/Users/username/kindle-mcp-server/dist/index.js"]
+   "args": ["/Users/username/kindle-annotations-mcp/dist/index.js"]
    ```
 
 4. **验证安装**：

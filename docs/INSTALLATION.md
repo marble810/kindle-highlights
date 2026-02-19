@@ -25,10 +25,10 @@ npm --version
 ```bash
 # 如果从 git 克隆
 git clone <repository-url>
-cd kindle-mcp-server
+cd kindle-annotations-mcp
 
 # 或解压下载的压缩包后进入目录
-cd kindle-mcp-server
+cd kindle-annotations-mcp
 ```
 
 ### 2. 安装依赖
@@ -159,7 +159,7 @@ npm start
      "mcpServers": {
        "kindle": {
          "command": "node",
-         "args": ["/absolute/path/to/kindle-mcp-server/dist/index.js"],
+         "args": ["/absolute/path/to/kindle-annotations-mcp/dist/index.js"],
          "env": {
            "KINDLE_REGION": "com"
          }
@@ -183,7 +183,7 @@ npm start
 安装后的目录结构：
 
 ```
-kindle-mcp-server/
+kindle-annotations-mcp/
 ├── dist/                      # 编译后的 JavaScript
 │   ├── index.js
 │   ├── browser.js
@@ -237,7 +237,7 @@ npx playwright install chromium --force
 rm -rf kindle-mcp-profile/
 
 # 2. 删除项目文件
-rm -rf kindle-mcp-server/
+rm -rf kindle-annotations-mcp/
 ```
 
 ## 下一步

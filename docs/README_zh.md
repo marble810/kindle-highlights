@@ -44,8 +44,8 @@
 
 1. **克隆仓库**
    ```bash
-   git clone https://github.com/yourusername/kindle-mcp-server.git
-   cd kindle-mcp-server
+   git clone https://github.com/yourusername/kindle-annotations-mcp.git
+   cd kindle-annotations-mcp
    ```
 
 2. **安装依赖**
@@ -92,7 +92,7 @@ KINDLE_REGION=com npm run login
   "mcpServers": {
     "kindle": {
       "command": "node",
-      "args": ["/absolute/path/to/kindle-mcp-server/dist/index.js"],
+      "args": ["/absolute/path/to/kindle-annotations-mcp/dist/index.js"],
       "env": {
         "KINDLE_REGION": "com"
       }
