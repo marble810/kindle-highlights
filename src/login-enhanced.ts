@@ -15,17 +15,7 @@ const PROJECT_ROOT = dirname(__dirname);
 
 // Region mapping for user-friendly names
 const REGION_NAMES: Record<string, string> = {
-  'com': '美国站',
   'co.jp': '日本站',
-  'co.uk': '英国站',
-  'de': '德国站',
-  'fr': '法国站',
-  'es': '西班牙站',
-  'it': '意大利站',
-  'ca': '加拿大站',
-  'com.au': '澳大利亚站',
-  'in': '印度站',
-  'com.mx': '墨西哥站',
 };
 
 /**
@@ -92,7 +82,7 @@ async function injectBanner(page: Page, state: 'waiting' | 'success' | 'navigati
  * Enhanced login session with visual feedback
  */
 export async function launchLoginSessionEnhanced(
-  region: AmazonRegion = 'com'
+  region: AmazonRegion = 'co.jp'
 ): Promise<void> {
   const USER_DATA_DIR = join(PROJECT_ROOT, 'kindle-mcp-profile');
 
@@ -239,7 +229,7 @@ export async function launchLoginSessionEnhanced(
  * 检查 Session 是否有效
  */
 export async function validateSession(
-  region: AmazonRegion = 'com'
+  region: AmazonRegion = 'co.jp'
 ): Promise<boolean> {
   const USER_DATA_DIR = join(PROJECT_ROOT, 'kindle-mcp-profile');
 

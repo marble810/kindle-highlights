@@ -50,3 +50,4 @@ TESTING.md
 restore.md
 docs_archive/
 CLAUDE.md
+.codex/config.toml

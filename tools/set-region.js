@@ -1,46 +1,29 @@
 #!/usr/bin/env node
 /**
  * Set Amazon region for Kindle MCP Server
- * Creates a config file to store the region preference
+ * This project supports co.jp only.
  */
 
 import { writeFileSync, readFileSync, existsSync } from 'fs';
-import { join } from 'path';
 
 const CONFIG_FILE = './kindle-region.config.json';
-const REGIONS = [
-  { code: 'com', name: 'United States (US)', url: 'read.amazon.com/notebook' },
-  { code: 'co.jp', name: 'Japan', url: 'read.amazon.co.jp/notebook' },
-  { code: 'co.uk', name: 'United Kingdom', url: 'read.amazon.co.uk/notebook' },
-  { code: 'de', name: 'Germany', url: 'read.amazon.de/notebook' },
-  { code: 'fr', name: 'France', url: 'read.amazon.fr/notebook' },
-  { code: 'es', name: 'Spain', url: 'read.amazon.es/notebook' },
-  { code: 'it', name: 'Italy', url: 'read.amazon.it/notebook' },
-  { code: 'ca', name: 'Canada', url: 'read.amazon.ca/notebook' },
-  { code: 'com.au', name: 'Australia', url: 'read.amazon.com.au/notebook' },
-  { code: 'in', name: 'India', url: 'read.amazon.in/notebook' },
-  { code: 'com.mx', name: 'Mexico', url: 'read.amazon.com.mx/notebook' },
-];
+const ONLY_REGION = { code: 'co.jp', name: 'Japan', url: 'read.amazon.co.jp/notebook' };
 
 function setRegion(regionCode: string) {
-  const region = REGIONS.find(r => r.code === regionCode);
-  if (!region) {
+  if (regionCode !== ONLY_REGION.code) {
     console.error(`Invalid region code: ${regionCode}`);
-    console.error('\nAvailable regions:');
-    REGIONS.forEach(r => {
-      console.error(`  ${r.code.padEnd(6)} - ${r.name}`);
-    });
+    console.error(`Only supported region: ${ONLY_REGION.code} (${ONLY_REGION.name})`);
     process.exit(1);
   }
 
-  writeFileSync(CONFIG_FILE, JSON.stringify({ region: regionCode, name: region.name }, null, 2));
-  console.log(`Amazon region set to: ${region.name} (${regionCode})`);
-  console.log(`Notebook URL: https://${region.url}`);
+  writeFileSync(CONFIG_FILE, JSON.stringify({ region: ONLY_REGION.code, name: ONLY_REGION.name }, null, 2));
+  console.log(`Amazon region set to: ${ONLY_REGION.name} (${ONLY_REGION.code})`);
+  console.log(`Notebook URL: https://${ONLY_REGION.url}`);
 }
 
 function showCurrent() {
   if (!existsSync(CONFIG_FILE)) {
-    console.log('No region configured. Using default: United States (com)');
+    console.log(`No region configured. Using default: ${ONLY_REGION.name} (${ONLY_REGION.code})`);
     return;
   }
 
@@ -50,11 +33,8 @@ function showCurrent() {
 
 function showHelp() {
   console.log('Amazon Region Configuration for Kindle MCP Server\n');
-  console.log('Usage: node tools/set-region.js <region-code>\n');
-  console.log('Available regions:');
-  REGIONS.forEach(r => {
-    console.log(`  ${r.code.padEnd(6)} - ${r.name}`);
-  });
+  console.log('Usage: node tools/set-region.js set co.jp\n');
+  console.log(`Supported region: ${ONLY_REGION.code} - ${ONLY_REGION.name}`);
 }
 
 const args = process.argv.slice(2);
@@ -66,7 +46,7 @@ switch (command) {
       setRegion(args[1]);
     } else {
       console.error('Error: Region code required');
-      console.error('Usage: node tools/set-region.js set <region-code>');
+      console.error('Usage: node tools/set-region.js set co.jp');
       showHelp();
       process.exit(1);
     }

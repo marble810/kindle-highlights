@@ -1,15 +1,13 @@
 /**
  * Configuration management for Kindle MCP Server
  * Supports three-tier configuration priority:
- * 1. CLI arguments (--region=<code>) - highest priority
+ * 1. CLI arguments (--region=co.jp) - highest priority
  * 2. Environment variables (KINDLE_REGION)
  * 3. Config file (kindle-region.config.json)
  * 4. Default value (co.jp) - fallback
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 import type { AmazonRegion } from './types.js';
 
 const CONFIG_FILE = './kindle-region.config.json';
@@ -18,7 +16,7 @@ const CONFIG_FILE = './kindle-region.config.json';
  * Amazon region configuration metadata
  */
 export interface RegionConfig {
-  /** The Amazon region code (e.g., 'com', 'co.jp') */
+  /** The Amazon region code */
   region: AmazonRegion;
   /** Source of the configuration */
   source: 'cli' | 'env' | 'file' | 'default';
@@ -35,20 +33,10 @@ export interface RegionInfo {
 }
 
 /**
- * All supported Amazon regions
+ * The only supported Amazon region (Japan)
  */
-export const REGIONS: Record<string, RegionInfo> = {
-  'com': { name: 'United States', url: 'https://www.amazon.com' },
+export const REGIONS: Record<AmazonRegion, RegionInfo> = {
   'co.jp': { name: 'Japan', url: 'https://www.amazon.co.jp' },
-  'co.uk': { name: 'United Kingdom', url: 'https://www.amazon.co.uk' },
-  'de': { name: 'Germany', url: 'https://www.amazon.de' },
-  'fr': { name: 'France', url: 'https://www.amazon.fr' },
-  'es': { name: 'Spain', url: 'https://www.amazon.es' },
-  'it': { name: 'Italy', url: 'https://www.amazon.it' },
-  'ca': { name: 'Canada', url: 'https://www.amazon.ca' },
-  'com.au': { name: 'Australia', url: 'https://www.amazon.com.au' },
-  'in': { name: 'India', url: 'https://www.amazon.in' },
-  'com.mx': { name: 'Mexico', url: 'https://www.amazon.com.mx' },
 };
 
 /**
@@ -57,17 +45,17 @@ export const REGIONS: Record<string, RegionInfo> = {
 export const DEFAULT_REGION: AmazonRegion = 'co.jp';
 
 /**
- * Validate if a string is a valid Amazon region code
+ * Validate if a string is a supported Amazon region code
  */
 export function isValidRegion(region: string): region is AmazonRegion {
-  return region in REGIONS;
+  return region === 'co.jp';
 }
 
 /**
- * Get region information for a given region code
+ * Get region information for the supported region
  */
 export function getRegionInfo(region: AmazonRegion): RegionInfo {
-  return REGIONS[region] || REGIONS[DEFAULT_REGION];
+  return REGIONS[region];
 }
 
 /**
@@ -105,15 +93,6 @@ function readEnvVariable(): AmazonRegion | null {
 
 /**
  * Get region configuration with three-tier priority
- *
- * Priority order (highest to lowest):
- * 1. CLI argument (cliArg)
- * 2. Environment variable (KINDLE_REGION)
- * 3. Config file (kindle-region.config.json)
- * 4. Default value (com)
- *
- * @param cliArg - Region code from command line argument, or null if not provided
- * @returns Region configuration with metadata about the source
  */
 export function getRegionConfig(cliArg: string | null): RegionConfig {
   // 1. Check CLI argument (highest priority)
@@ -154,10 +133,10 @@ export function getRegionConfig(cliArg: string | null): RegionConfig {
 }
 
 /**
- * Get a list of all valid region codes
+ * Get a list of valid region codes
  */
 export function getValidRegions(): string[] {
-  return Object.keys(REGIONS);
+  return ['co.jp'];
 }
 
 /**

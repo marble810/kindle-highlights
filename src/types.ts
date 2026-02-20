@@ -4,20 +4,10 @@
  */
 
 /**
- * Amazon regions/endpoints available for Kindle
+ * Amazon region/endpoints available for Kindle.
+ * This project currently supports only Japan (co.jp).
  */
-export type AmazonRegion =
-  | 'com'    // US (amazon.com)
-  | 'co.jp'   // Japan (amazon.co.jp)
-  | 'co.uk'   // UK (amazon.co.uk)
-  | 'de'      // Germany (amazon.de)
-  | 'fr'      // France (amazon.fr)
-  | 'es'      // Spain (amazon.es)
-  | 'it'      // Italy (amazon.it)
-  | 'ca'      // Canada (amazon.ca)
-  | 'com.au'  // Australia (amazon.com.au)
-  | 'in'      // India (amazon.in)
-  | 'com.mx'; // Mexico (amazon.com.mx)
+export type AmazonRegion = 'co.jp';
 
 /**
  * Get base URL for Amazon region
@@ -29,8 +19,8 @@ export function getAmazonBaseUrl(region: AmazonRegion): string {
 /**
  * Get Kindle Notebook URL for Amazon region
  */
-export function getNotebookUrl(region: AmazonRegion): string {
-  return `https://read.amazon.${region}/notebook`;
+export function getNotebookUrl(region: AmazonRegion, language: string = 'en_US'): string {
+  return `https://read.amazon.${region}/notebook?ref_=kcr_notebook_lib&language=${language}`;
 }
 
 /**
@@ -142,9 +132,99 @@ export interface LoginToolResult {
   /** Whether browser was successfully opened */
   success: boolean;
   /** Login status */
-  status: 'browser_opened' | 'login_detected' | 'failed';
+  status: 'browser_opened' | 'already_opened' | 'failed';
+  /** Detailed login phase */
+  phase?: 'waiting_manual_login' | 'failed';
+  /** Optional diagnostic details for login flow */
+  details?: {
+    openedAt?: string;
+    existingSessionRegion?: AmazonRegion;
+  };
   /** Status message */
   message: string;
   /** Amazon region */
   region: AmazonRegion;
+}
+
+export type LoginAction = 'none' | 'run_login' | 'retry_later';
+
+/**
+ * check_login_status tool return result
+ */
+export interface LoginStatusToolResult {
+  /** Whether status check ran successfully */
+  success: boolean;
+  /** High-level status of auth readiness */
+  status: 'ready' | 'main_only' | 'needs_login' | 'failed';
+  /** Next recommended action */
+  action: LoginAction;
+  /** Probe details */
+  details: {
+    mainLoggedIn: boolean;
+    webReaderReady: boolean;
+    mainProbeUrl: string;
+    webReaderProbeUrl: string;
+    initialUrl?: string;
+    finalUrl?: string;
+    redirectCount?: number;
+    stabilizationMs?: number;
+    usedStorageState?: boolean;
+  };
+  /** Status message */
+  message: string;
+  /** Amazon region */
+  region: AmazonRegion;
+}
+
+/**
+ * Result reasons for headed fallback repair.
+ */
+export type HeadedRepairReason =
+  | 'ready'
+  | 'signin'
+  | 'captcha'
+  | 'timeout'
+  | 'error'
+  | 'unknown';
+
+/**
+ * Request payload for the headed repair worker.
+ */
+export interface HeadedRepairRequest {
+  region: AmazonRegion;
+  userDataDir: string;
+  args: string[];
+  authStatePath: string;
+  readNavigationTimeoutMs: number;
+  repairNavigationTimeoutMs: number;
+  closeDelayMs: number;
+}
+
+/**
+ * Result payload returned by the headed repair worker.
+ */
+export interface HeadedRepairResult {
+  success: boolean;
+  reason: HeadedRepairReason;
+  message: string;
+  initialUrl?: string;
+  finalUrl?: string;
+  redirectCount?: number;
+  stabilizationMs?: number;
+}
+
+/**
+ * Inbound worker message sent by parent process.
+ */
+export interface HeadedRepairWorkerInboundMessage {
+  type: 'run';
+  payload: HeadedRepairRequest;
+}
+
+/**
+ * Outbound worker message emitted by child process.
+ */
+export interface HeadedRepairWorkerOutboundMessage {
+  type: 'result';
+  payload: HeadedRepairResult;
 }

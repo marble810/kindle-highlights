@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Kindle MCP Server
- * MCP Server for scraping Kindle highlights and notes from read.amazon.com
+ * MCP Server for scraping Kindle highlights and notes from read.amazon.co.jp
  * Phase 4: MCP Server Implementation
  */
 
@@ -12,7 +12,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { scrapeKindleNotes, launchLoginSession, getBookList, fetchBookHighlights, getLoginInstructions, launchLoginForMCP } from './browser.js';
+import { scrapeKindleNotes, launchLoginSession, getBookList, fetchBookHighlights, getLoginInstructions, launchLoginForMCP, checkLoginStatus } from './browser.js';
 import type { KindleBookData, ScrapingResult, AmazonRegion, LoginToolResult } from './types.js';
 import {
   getRegionConfig,
@@ -91,13 +91,27 @@ function createServer(region: AmazonRegion): Server {
       tools: [
         {
           name: 'login',
-          description: 'Launch an interactive browser session for Amazon authentication. Use this when your session expires or when you need to log in for the first time. The browser will open and wait for you to complete the login process manually.',
+          description: 'Open a browser for manual Amazon sign-in only. This tool does not auto-detect success or auto-close. After signing in, call check_login_status to verify readiness.',
           inputSchema: {
             type: 'object',
             properties: {
               region: {
                 type: 'string',
-                description: 'Amazon region code (e.g., "com" for US, "co.jp" for Japan). Defaults to the server configured region.',
+                description: 'Amazon region code (e.g., "co.jp" for Japan). Defaults to the server configured region.',
+                enum: getValidRegions(),
+              },
+            },
+          },
+        },
+        {
+          name: 'check_login_status',
+          description: 'Check whether Amazon main-site login and Kindle Web Reader session are ready.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              region: {
+                type: 'string',
+                description: 'Amazon region code (e.g., "co.jp" for Japan). Defaults to the server configured region.',
                 enum: getValidRegions(),
               },
             },
@@ -131,10 +145,23 @@ function createServer(region: AmazonRegion): Server {
   // Register tool call handler
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    const requestedRegion = typeof args?.region === 'string' ? args.region : undefined;
 
     try {
       switch (name) {
         case 'login': {
+          if (requestedRegion && !isValidRegion(requestedRegion)) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error: Unsupported region "${requestedRegion}". Only "co.jp" is supported.`,
+                },
+              ],
+              isError: true,
+            };
+          }
+
           const loginRegion = typeof args?.region === 'string' && isValidRegion(args.region)
             ? args.region as AmazonRegion
             : region;
@@ -150,6 +177,37 @@ function createServer(region: AmazonRegion): Server {
                 text: JSON.stringify(result, null, 2),
               },
             ],
+          };
+        }
+
+        case 'check_login_status': {
+          if (requestedRegion && !isValidRegion(requestedRegion)) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error: Unsupported region "${requestedRegion}". Only "co.jp" is supported.`,
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          const statusRegion = typeof args?.region === 'string' && isValidRegion(args.region)
+            ? args.region as AmazonRegion
+            : region;
+
+          console.error(`[MCP] Checking login status for region: ${statusRegion}`);
+
+          const result = await checkLoginStatus(statusRegion);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+            isError: !result.success,
           };
         }
 
@@ -172,7 +230,7 @@ function createServer(region: AmazonRegion): Server {
                       error: 'SESSION_EXPIRED',
                       message: 'Your Amazon session has expired.',
                       region: region,
-                      actionRequired: 'Please use the "login" MCP tool to re-authenticate.',
+                      actionRequired: 'Please use "login" for manual sign in, then call "check_login_status" to verify.',
                     }, null, 2),
                   },
                 ],
@@ -238,7 +296,7 @@ function createServer(region: AmazonRegion): Server {
                       error: 'SESSION_EXPIRED',
                       message: 'Your Amazon session has expired.',
                       region: region,
-                      actionRequired: 'Please use the "login" MCP tool to re-authenticate.',
+                      actionRequired: 'Please use "login" for manual sign in, then call "check_login_status" to verify.',
                     }, null, 2),
                   },
                 ],
